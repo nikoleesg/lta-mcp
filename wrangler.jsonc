@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lta-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "observability": {
+    "enabled": true
+  }
+  // No KV namespace: DataMall authenticates with a static AccountKey header,
+  // so there is no token to fetch or cache (unlike onemap-mcp).
+  //
+  // Secrets (never set here — see README "Setup"), both required:
+  //   LTA_ACCOUNT_KEY, MCP_SHARED_SECRET
+}

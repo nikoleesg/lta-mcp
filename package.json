@@ -1,0 +1,25 @@
+{
+  "name": "lta-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stateless MCP server on Cloudflare Workers wrapping Singapore LTA DataMall's real-time Bus Arrival API",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260831.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.127.1"
+  }
+}
