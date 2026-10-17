@@ -14,7 +14,7 @@ This server does **not** resolve bus stop names to codes — `bus_arrival` takes
 - No `/mcp` path — the Worker's base URL *is* the MCP endpoint. The transport doesn't care about the request path, only method/headers/body, so nothing is mounted under a subpath.
 - DataMall authenticates with a **static `AccountKey` header**, not a token exchange. There is nothing to refresh and nothing to cache, so unlike `onemap-mcp` this server needs no KV namespace — the key is read from a Worker secret and forwarded on each call.
 - Responses are **not** cached. The upstream data changes every 20 seconds and the whole point of the tool is liveness, so every call is a fresh round trip.
-- This Worker's own MCP endpoint is gated by a required `MCP_SHARED_SECRET` bearer token — every request must present it (see "Setup"). A deployment with the secret unset returns `500`, not an open endpoint. A plain browser visit (no MCP client) still gets a friendly status message, unauthenticated.
+- The Worker does no authentication of its own — it relies on a Cloudflare Access application in front of it (see "Access control").
 
 ### What the wrapper adds over the raw API
 
@@ -43,10 +43,9 @@ An empty `services` list is a normal answer rather than an error: LTA only publi
 ```bash
 npm install
 
-# Secrets — never committed, set per environment. Both are required; the
-# Worker fails closed (500, and the tool errors out) if either is missing.
+# Secret — never committed, set per environment. Required; the tool fails
+# closed (errors out) if it is missing.
 npx wrangler secret put LTA_ACCOUNT_KEY
-npx wrangler secret put MCP_SHARED_SECRET   # e.g. `openssl rand -hex 32`
 ```
 
 For local development, copy `.dev.vars.example` to `.dev.vars` and fill in real values (`.dev.vars` is gitignored) — `wrangler dev` reads secrets from there instead of the Cloudflare dashboard.
@@ -104,6 +103,14 @@ Live as of 23:53 SST (UTC+8). "0 min" means arriving now.
 
 The tool is registered bare — `bus_arrival`, not `lta_bus_arrival` — deliberately, because the ContextForge gateway this server is meant to run behind auto-prefixes tool names with the backend name it is registered under. Registered bare here, it surfaces as `lta_bus_arrival` once wrapped in the gateway, matching MCP's collision-avoidance convention without hardcoding the prefix twice. A client connecting to this Worker directly (bypassing ContextForge) sees the bare name instead.
 
+## Access control
+
+This Worker does no authentication of its own: it is meant to sit behind a [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) self-hosted application, which authenticates every request at Cloudflare's edge before it reaches the Worker. Without one in front of it, the endpoint is open to anyone who finds the URL.
+
+- **Make the Worker itself the Access destination** (Workers & Pages → the Worker → Access → *Protect this Worker behind Access* → **All traffic**, or a self-hosted application whose destination is this Worker). That covers every way in — routes, custom domains, the `*.workers.dev` URL and preview URLs. A hostname-based application covers only the hostnames it lists, so the `*.workers.dev` and preview URLs would stay open unless they're listed too.
+- **Machine clients (e.g. the ContextForge gateway)** authenticate with an Access **service token**: add a *Service Auth* policy for it to the application, and the client sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` on every request (see "Client config"). Create the token under Zero Trust → Access → Service credentials → Service Tokens; the secret is shown only once.
+- A plain browser visit gets Access's login page; once signed in, it reaches the Worker's friendly status message.
+
 ## Client config
 
 This is a remote streamable-HTTP MCP server. Point any MCP client (including the ContextForge gateway) at the deployed base URL — there is no `/mcp` path suffix:
@@ -115,19 +122,20 @@ This is a remote streamable-HTTP MCP server. Point any MCP client (including the
       "type": "streamable-http",
       "url": "https://lta-mcp.<YOUR_WORKERS_SUBDOMAIN>.workers.dev",
       "headers": {
-        "Authorization": "Bearer <MCP_SHARED_SECRET>"
+        "CF-Access-Client-Id": "<CF_ACCESS_CLIENT_ID>",
+        "CF-Access-Client-Secret": "<CF_ACCESS_CLIENT_SECRET>"
       }
     }
   }
 }
 ```
 
-The `headers` block is required — `MCP_SHARED_SECRET` must be set on every deployment, and every protocol request must present it or the Worker rejects it (401 if wrong, 500 if the deployment forgot to configure the secret at all).
+The `headers` carry a Cloudflare Access service token — see "Access control" for where to create one. Without them, Access answers with a redirect to its login page instead of forwarding the request. Replace the `url` with your custom domain if the Access application is on one.
 
 ## Security notes
 
-- No DataMall key or Cloudflare identifiers are stored in this repo — `LTA_ACCOUNT_KEY` and `MCP_SHARED_SECRET` are Worker secrets.
-- `MCP_SHARED_SECRET` is mandatory: without it configured, the Worker refuses all protocol traffic rather than serving it openly. This prevents anyone who finds the `*.workers.dev` URL from spending your DataMall quota.
+- No DataMall key or Cloudflare identifiers are stored in this repo — `LTA_ACCOUNT_KEY` is a Worker secret.
+- The Cloudflare Access application is mandatory: the Worker itself accepts any request, so without Access in front of every hostname it answers on, anyone who finds the URL can spend your DataMall quota.
 - The account key is only ever sent upstream to `datamall2.mytransport.sg` as the `AccountKey` header; it is never echoed into a tool response or an error message.
 
 ## Out of scope

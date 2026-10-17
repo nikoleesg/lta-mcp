@@ -1,6 +1,6 @@
 {
   "name": "lta-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Stateless MCP server on Cloudflare Workers wrapping Singapore LTA DataMall's real-time Bus Arrival API",
   "type": "module",

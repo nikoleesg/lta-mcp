@@ -9,6 +9,6 @@
   // No KV namespace: DataMall authenticates with a static AccountKey header,
   // so there is no token to fetch or cache (unlike onemap-mcp).
   //
-  // Secrets (never set here — see README "Setup"), both required:
-  //   LTA_ACCOUNT_KEY, MCP_SHARED_SECRET
+  // Secret (never set here — see README "Setup"), required:
+  //   LTA_ACCOUNT_KEY
 }

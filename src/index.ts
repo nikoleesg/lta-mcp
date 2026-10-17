@@ -3,20 +3,6 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import type { Env } from "./env.js";
 import { buildServer } from "./server.js";
 
-/**
- * Fails closed: a missing MCP_SHARED_SECRET is a deployment misconfiguration
- * (500), not an open gate. Every protocol request must present it — there's
- * no unauthenticated path into this Worker's MCP handler.
- */
-function checkSharedSecret(request: Request, env: Env): Response | null {
-  if (!env.MCP_SHARED_SECRET) {
-    return new Response("Server misconfigured: MCP_SHARED_SECRET is not set.", { status: 500 });
-  }
-  const header = request.headers.get("Authorization");
-  if (header === `Bearer ${env.MCP_SHARED_SECRET}`) return null;
-  return new Response("Unauthorized", { status: 401 });
-}
-
 /** A plain browser tab hitting the base URL, as opposed to an MCP client's GET (which asks for text/event-stream). */
 function isBrowserNavigation(request: Request): boolean {
   return request.method === "GET" && (request.headers.get("Accept") ?? "").includes("text/html");
@@ -34,8 +20,9 @@ export default {
       });
     }
 
-    const unauthorized = checkSharedSecret(request, env);
-    if (unauthorized) return unauthorized;
+    // No auth check here: the Worker sits behind a Cloudflare Access
+    // application, which authenticates every request at the edge before it
+    // reaches this handler. See README "Access control".
 
     // A fresh handler (and fresh McpServer, via buildServer) per request keeps
     // this Worker fully stateless — no session affinity, safe to run on any
